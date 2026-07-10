@@ -5,29 +5,33 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 
+#dataset
+dataset_size = 3000
 
 # diameter classes
-diameters = [2, 4, 7, 11]
+diameters = [3, 6, 9, 15]
+patch_size = 32  # 16x16 patches
 
 
 # -----------------------------
 # 1. Generate synthetic patches
 # -----------------------------
 def generate_circle_patch(diameter):
-    patch = np.zeros((16, 16), dtype=np.float32)
+    global patch_size
+    patch = np.zeros((patch_size, patch_size), dtype=np.float32)
     radius = diameter / 2.0
 
     # random center fully inside patch with enough margin for the circle
-    cx = np.random.uniform(radius, 16.0 - radius)
-    cy = np.random.uniform(radius, 16.0 - radius)
+    cx = np.random.uniform(radius, patch_size - radius)
+    cy = np.random.uniform(radius, patch_size - radius)
 
     # approximate pixel coverage with a 4x4 subpixel grid
     sub = 4
     inv_sub2 = 1.0 / (sub * sub)
     offsets = (np.arange(sub) + 0.5) / sub
 
-    for y in range(16):
-        for x in range(16):
+    for y in range(patch_size):
+        for x in range(patch_size):
             inside = 0
             for oy in offsets:
                 for ox in offsets:
@@ -60,9 +64,10 @@ def create_dataset(n_samples=5000):
 # -----------------------------
 class PatchEmbeddingModel(nn.Module):
     def __init__(self, embed_dim=64):
+        global patch_size
         super().__init__()
         # This linear layer IS the W matrix
-        self.W = nn.Linear(256, embed_dim)
+        self.W = nn.Linear(patch_size * patch_size, embed_dim)
 
         # classifier head
         global diameters
@@ -87,7 +92,7 @@ if os.path.exists(checkpoint_path):
 else:
     print(f"No model found at '{checkpoint_path}', so generate one..")
     print("Generating dataset and training model...")
-    X, y = create_dataset(16000)
+    X, y = create_dataset(dataset_size)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -143,8 +148,8 @@ for i in range(15):
     ax1.clear()
     
     # Original patch
-    ax1.imshow(random_patch.reshape(16, 16), cmap='gray')
-    ax1.set_title(f"Original: diameter={random_diameter}")
+    ax1.imshow(random_patch.reshape(patch_size, patch_size), cmap='gray')
+    ax1.set_title(f"{random_diameter}={predicted_diameter} {'!' if is_correct else '?'}")
     ax1.axis('off')
     
     plt.suptitle(f"Iteration {i} - Press SPACE to continue")
