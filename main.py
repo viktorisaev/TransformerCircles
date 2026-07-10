@@ -6,12 +6,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #dataset
-dataset_size = 3000
+dataset_size = 10000
+epochs = 400
 
 # diameter classes
 diameters = [3, 6, 9, 15]
 patch_size = 32  # 16x16 patches
 
+
+def get_model_signature():
+    return f"{patch_size}x{patch_size}_{"_".join(str(d) for d in diameters)}"
 
 # -----------------------------
 # 1. Generate synthetic patches
@@ -83,21 +87,23 @@ class PatchEmbeddingModel(nn.Module):
 # -----------------------------
 # 3. Train model
 # -----------------------------
-model = PatchEmbeddingModel(embed_dim=32)
-checkpoint_path = "model.pt"
+model_signature = f"{get_model_signature()}.pt"
+print("Model signature:", model_signature)
 
-if os.path.exists(checkpoint_path):
-    model.load_state_dict(torch.load(checkpoint_path))
-    print(f"Loaded previously saved model from {checkpoint_path}")
+model = PatchEmbeddingModel(embed_dim=32)
+
+if os.path.exists(model_signature):
+    model.load_state_dict(torch.load(model_signature))
+    print(f"Loaded previously saved model from {model_signature}")
 else:
-    print(f"No model found at '{checkpoint_path}', so generate one..")
+    print(f"No model found at '{model_signature}', so generate one..")
     print("Generating dataset and training model...")
     X, y = create_dataset(dataset_size)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     print("Training model...")
-    for epoch in range(200):
+    for epoch in range(epochs):
         optimizer.zero_grad()
         out, emb = model(X)
         loss = criterion(out, y)
@@ -105,8 +111,8 @@ else:
         optimizer.step()
         print(f"Epoch {epoch+1}, Loss = {loss.item():.4f}")
 
-    torch.save(model.state_dict(), checkpoint_path)
-    print(f"Saved model checkpoint to {checkpoint_path}")
+    torch.save(model.state_dict(), model_signature)
+    print(f"Saved model checkpoint to {model_signature}")
 
 # -----------------------------
 # 4. Show learned W matrix
@@ -114,12 +120,14 @@ else:
 print("\nLearned W matrix (shape):", model.W.weight.shape)
 # print(model.W.weight)
 
-key_pressed = {'space': False}
+key_pressed = {'space': False, 'esc': False}
 
 # Wait for space key press
 def on_key(event):
     if event.key == ' ':
         key_pressed['space'] = True
+    if event.key == 'escape':
+        key_pressed['esc'] = True
 
 # Create figure once at the start
 fig, (ax1) = plt.subplots(1, 1, figsize=(4, 4))
@@ -127,8 +135,12 @@ fig.canvas.mpl_connect('key_press_event', on_key)
 
 model.eval()
 
-for i in range(15):
+success_count = 0.0
+total_count = 0
+
+while not key_pressed['esc']:
     key_pressed['space'] = False
+    key_pressed['esc'] = False
     
     random_diameter = np.random.choice(diameters)
     random_patch = generate_circle_patch(random_diameter)
@@ -141,8 +153,12 @@ for i in range(15):
     predicted_diameter = diameters[predicted_class]
     is_correct = predicted_diameter == random_diameter
 
-    print(f"{i}: Random patch diameter: {random_diameter}")
-    print(f"Model predicted class index: {predicted_class}, diameter: {predicted_diameter}, result={is_correct}")
+    total_count += 1
+    if is_correct:
+        success_count += 1
+
+    # print(f"{i}: Random patch diameter: {random_diameter}")
+    # print(f"Model predicted class index: {predicted_class}, diameter: {predicted_diameter}, result={is_correct}")
 
     # Clear and update subplots
     ax1.clear()
@@ -152,11 +168,11 @@ for i in range(15):
     ax1.set_title(f"{random_diameter}={predicted_diameter} {'!' if is_correct else '?'}")
     ax1.axis('off')
     
-    plt.suptitle(f"Iteration {i} - Press SPACE to continue")
+    plt.suptitle(f"#{total_count} ({success_count/total_count:.3}) - [SPACE] or [ESC]")
     plt.draw()
 
     # Wait for space key press
-    while not key_pressed['space']:
-        plt.pause(0.1)
+    while not key_pressed['space'] and not key_pressed['esc']:
+        plt.pause(0.2)
 
 plt.close()
