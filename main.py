@@ -5,6 +5,11 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+# diameter classes
+diameters = [2, 4, 7, 11]
+
+
 # -----------------------------
 # 1. Generate synthetic patches
 # -----------------------------
@@ -12,14 +17,25 @@ def generate_circle_patch(diameter):
     patch = np.zeros((16, 16), dtype=np.float32)
     radius = diameter / 2.0
 
-    # random center fully inside patch
-    cx = np.random.randint(radius, 16 - radius)
-    cy = np.random.randint(radius, 16 - radius)
+    # random center fully inside patch with enough margin for the circle
+    cx = np.random.uniform(radius, 16.0 - radius)
+    cy = np.random.uniform(radius, 16.0 - radius)
 
-    for x in range(16):
-        for y in range(16):
-            if (x - cx)**2 + (y - cy)**2 <= radius**2:
-                patch[y, x] = 255.0  # filled circle
+    # approximate pixel coverage with a 4x4 subpixel grid
+    sub = 4
+    inv_sub2 = 1.0 / (sub * sub)
+    offsets = (np.arange(sub) + 0.5) / sub
+
+    for y in range(16):
+        for x in range(16):
+            inside = 0
+            for oy in offsets:
+                for ox in offsets:
+                    px = x + ox
+                    py = y + oy
+                    if (px - cx) ** 2 + (py - cy) ** 2 <= radius ** 2:
+                        inside += 1
+            patch[y, x] = inside * inv_sub2 * 255.0
 
     return patch.flatten() / 255.0  # normalize
 
@@ -27,7 +43,7 @@ def generate_circle_patch(diameter):
 def create_dataset(n_samples=5000):
     X = []
     y = []
-    diameters = [1, 5, 11]
+    global diameters
 
     for _ in range(n_samples):
         d = np.random.choice(diameters)
@@ -49,7 +65,8 @@ class PatchEmbeddingModel(nn.Module):
         self.W = nn.Linear(256, embed_dim)
 
         # classifier head
-        self.classifier = nn.Linear(embed_dim, 3)
+        global diameters
+        self.classifier = nn.Linear(embed_dim, len(diameters))
 
     def forward(self, x):
         embedding = self.W(x)          # semantic embedding
@@ -61,8 +78,7 @@ class PatchEmbeddingModel(nn.Module):
 # -----------------------------
 # 3. Train model
 # -----------------------------
-X, y = create_dataset(16000)
-model = PatchEmbeddingModel(embed_dim=128)
+model = PatchEmbeddingModel(embed_dim=32)
 checkpoint_path = "model.pt"
 
 if os.path.exists(checkpoint_path):
@@ -70,10 +86,13 @@ if os.path.exists(checkpoint_path):
     print(f"Loaded previously saved model from {checkpoint_path}")
 else:
     print(f"No model found at '{checkpoint_path}', so generate one..")
+    print("Generating dataset and training model...")
+    X, y = create_dataset(16000)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(100):
+    print("Training model...")
+    for epoch in range(200):
         optimizer.zero_grad()
         out, emb = model(X)
         loss = criterion(out, y)
@@ -89,9 +108,6 @@ else:
 # -----------------------------
 print("\nLearned W matrix (shape):", model.W.weight.shape)
 # print(model.W.weight)
-
-# Generate a random patch and classify it with the loaded model
-diameters = [1, 5, 11]
 
 key_pressed = {'space': False}
 
