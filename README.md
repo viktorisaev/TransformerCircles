@@ -1,2 +1,3 @@
 Predict the size of the circle in the image: 1, 5 or 11 pixels diameter
-<img width="402" height="430" alt="image" src="https://github.com/user-attachments/assets/1ec05af3-15f0-44e7-a5f9-f506e2a05f4b" />
+<img width="409" height="482" alt="image" src="https://github.com/user-attachments/assets/019dd29c-0666-4794-b7a7-1ea2d237a953" />
+
